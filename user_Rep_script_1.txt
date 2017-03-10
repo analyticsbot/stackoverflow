@@ -1,0 +1,57 @@
+DECLARE @start date = '2015-02-01',
+        @end date = '2015-03-31';
+
+
+DECLARE @reputation_from int = 50000
+DECLARE @reputation_to int = 1000000
+
+SELECT
+  a.Uid,
+  a.question_points,
+  a.Answer_points,
+  a.downvotes_by_user,
+  b.downvotes_user_got,
+  week
+FROM ((SELECT
+  u.Id AS 'Uid',
+  5 * (SUM(CASE
+    WHEN p.PostTypeId = 1 THEN 1
+    ELSE 0
+  END)) AS 'question_points',
+  10 * (SUM(CASE
+    WHEN p.PostTypeId = 2 THEN 1
+    ELSE 0
+  END))
+  AS 'Answer_points',
+  -1 * (u.downvotes) AS 'downvotes_by_user',
+  DATEPART(WEEK, p.CreationDate) AS 'week'
+FROM posts p
+INNER JOIN users u
+  ON U.Id = p.OwnerUserId
+WHERE u.Reputation > @reputation_from
+AND u.Reputation < @reputation_to
+AND (p.CreationDate > @start
+AND p.CreationDate < @end)
+GROUP BY U.Id,
+         DATEPART(WEEK, p.CreationDate),
+         u.downvotes) a
+
+INNER JOIN (SELECT
+  v.UserId AS 'Uid',
+  DATEPART(WEEK, v.CreationDate) AS 'Vote_week',
+  -2 * (SUM(CASE
+    WHEN v.VoteTypeId = 3 THEN 1
+    ELSE 0
+  END)) AS 'downvotes_user_got'
+FROM votes v
+INNER JOIN users u
+  ON v.UserId = u.Id
+WHERE u.Reputation > @reputation_from
+AND u.Reputation < @reputation_to
+AND (v.CreationDate > @start
+AND v.CreationDate < @end)
+GROUP BY v.UserId,
+         DATEPART(WEEK, v.CreationDate)) b
+
+  ON (a.Uid = b.Uid
+  AND a.week = b.Vote_week))

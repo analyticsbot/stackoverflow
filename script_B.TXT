@@ -1,0 +1,67 @@
+DECLARE @start date = '2015-02-01',
+        @end date = '2015-03-31';
+
+
+DECLARE @reputation_from int = 50000
+DECLARE @reputation_to int = 1000000
+
+SELECT
+  b.Analysis_Week,
+  c.*
+FROM (SELECT
+  DATEPART(WEEK, Date) AS 'CALENDAR_WEEK',
+  DENSE_RANK() OVER (ORDER BY DATEPART(WEEK, Date)) AS 'Analysis_Week'
+FROM (SELECT TOP (DATEDIFF(DAY, @start, @end) + 1)
+  Date = DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY a.object_id) - 1, @start)
+FROM sys.all_objects a
+CROSS JOIN sys.all_objects b) a
+GROUP BY DATEPART(WEEK, Date)) b
+
+INNER JOIN (SELECT
+  UserId,
+  DATEPART(WEEK, badgedate) Week,
+  SUM(bronze) AS 'bronzec',
+  SUM(silver) AS 'silverc',
+  SUM(gold) AS 'goldc',
+  SUM(qbadge) AS 'questionb',
+  SUM(abadge) AS 'answerb'
+FROM (SELECT
+  u.id UserId,
+  b.date AS 'badgedate',
+  CASE
+    WHEN b.class = 3 THEN 1
+    ELSE 0
+  END 'bronze',
+  CASE
+    WHEN b.class = 2 THEN 1
+    ELSE 0
+  END 'silver',
+  CASE
+    WHEN b.class = 1 THEN 1
+    ELSE 0
+  END 'gold',
+  CASE
+    WHEN b.name IN ('Altruist', 'Benefactor', 'Curious', 'Inquisituve',
+      'Socratic', 'Favorite Question', 'Stellar Question', 'Investor',
+      'Nice Question', 'Good Question', 'Great Question', 'Popular Question',
+      'Notable Question', 'Famous Question', 'Promoter', 'Scholar', 'Student', 'Tumbleweed') THEN 1
+    ELSE 0
+  END 'qbadge',
+
+  CASE
+    WHEN b.name IN ('Enlightened', 'Explainer', 'Refiner', 'Illuminator',
+      'Generalist', 'Guru', 'Nice Answer', 'Good Answer', 'Great Answer', 'Populist',
+      'Reversal', 'Revival', 'Necromancer', 'Self-Learner', 'Teacher', 'Tenacious', 'Unsung Hero') THEN 1
+    ELSE 0
+  END 'abadge'
+
+FROM badges b
+INNER JOIN users u
+  ON u.id = b.userid
+WHERE (b.date > @start
+AND b.date <= @end
+AND (u.Reputation > @reputation_from
+AND u.Reputation < @reputation_to))) a
+GROUP BY UserId,
+         DATEPART(WEEK, BadgeDate)) c
+  ON c.Week = b.CALENDAR_WEEK;

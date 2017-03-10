@@ -1,0 +1,64 @@
+DECLARE @start date = '2015-02-01',
+        @end date = '2015-03-31';
+
+DECLARE @reputation_from int = 50000
+DECLARE @reputation_to int = 1000000
+
+SELECT
+  b.Analysis_Week,
+  c.*
+FROM (SELECT
+  DATEPART(WEEK, Date) AS 'CALENDAR_WEEK',
+  DENSE_RANK() OVER (ORDER BY DATEPART(WEEK, Date)) AS 'Analysis_Week'
+FROM (SELECT TOP (DATEDIFF(DAY, @start, @end) + 1)
+  Date = DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY a.object_id) - 1, @start)
+FROM sys.all_objects a
+CROSS JOIN sys.all_objects b) a
+GROUP BY DATEPART(WEEK, Date)) b
+
+INNER JOIN (SELECT
+  Uid,
+  [Year],
+  Week,
+  upvotes,
+  downvotes,
+  tenure,
+  views,
+  Reputation
+FROM (SELECT
+  u.Id AS 'Uid',
+  u.Views AS 'views',
+  YEAR(p.CreationDate) AS 'Year',
+  DATEDIFF(WEEK, u.CreationDate, p.CreationDate) AS 'tenure',
+  DATEPART(WEEK, p.CreationDate) AS 'Week',
+  SUM(CASE
+    WHEN v.VoteTypeId = 2 THEN 1
+    ELSE 0
+  END) AS 'upvotes',
+  SUM(CASE
+    WHEN v.VoteTypeId = 3 THEN 1
+    ELSE 0
+  END) AS 'downvotes',
+  u.reputation AS 'Reputation'
+FROM users AS u
+INNER JOIN posts AS p
+  ON u.Id = p.OwnerUserid
+INNER JOIN Votes AS v
+  ON v.PostId = p.Id
+WHERE p.PostTypeId = 2
+AND v.VoteTypeId IN (2, 3)
+AND (v.CreationDate > @start
+AND v.CreationDate <= @end
+AND (u.Reputation > @reputation_from
+AND u.Reputation < @reputation_to)
+AND p.CreationDate > @start
+AND p.CreationDate <= @end)
+GROUP BY u.Id,
+         u.Reputation,
+         DATEPART(WEEK, p.CreationDate),
+         DATEDIFF(WEEK, u.CreationDate, p.CreationDate),
+         YEAR(p.CreationDate),
+         upvotes,
+         downvotes,
+         views) a) c
+  ON b.CALENDAR_WEEK = c.Week;

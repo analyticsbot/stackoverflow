@@ -1,0 +1,25 @@
+DECLARE @start date = '2015-02-01',
+        @end date = '2015-03-31';
+
+DECLARE @reputation_from int = 50000
+DECLARE @reputation_to int = 1000000
+
+SELECT
+  a.OwnerUserId AS 'Uid',
+  COUNT(*) AS Acceptedanswers,
+  15 * (COUNT(*)) AS 'points',
+  DATEPART(WEEK, a.CreationDate)
+  AS 'week'
+FROM Posts q
+INNER JOIN Posts a
+  ON q.AcceptedAnswerId = a.Id
+WHERE a.OwnerUserId IN (SELECT
+  Id
+FROM users u
+WHERE u.Reputation > @reputation_from
+AND u.Reputation < @reputation_to)
+AND a.PostTypeId = 2
+AND a.CreationDate > @start
+AND a.CreationDate <= @end
+GROUP BY a.OwnerUserId,
+         DATEPART(WEEK, a.CreationDate)

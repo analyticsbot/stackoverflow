@@ -1,0 +1,53 @@
+DECLARE @start date = '2015-01-01';
+DECLARE @end date = '2015-06-30';
+DECLARE @reputation_from int = 50000;
+DECLARE @reputation_to int = 1000000;
+
+SELECT d.uid, week,  upvotes, 
+downvotes, a.Uid, calendar_week as calendar_week ,  Answers_this_week,  score,  comments,  views,  (comments / Answers_this_week) AS 'commentspa',
+  (views / Answers_this_week)  AS 'viewspa'
+
+
+FROM ( (SELECT
+				  p.owneruserid AS 'uid',  DATEPART(WEEK, v.creationdate) AS 'week',
+                  SUM(CASE    WHEN v.VoteTypeId = 2 THEN 1    ELSE 0  END) AS 'upvotes',
+				  SUM(CASE    WHEN v.VoteTypeId = 3 THEN 1    ELSE 0  END) AS 'downvotes'
+				FROM posts p
+				INNER JOIN votes v
+				  ON p.id = v.postid
+				WHERE (v.creationdate >= @start AND v.creationdate <= @end)
+				AND p.posttypeid = 2
+				GROUP BY p.owneruserid,DATEPART(WEEK, v.creationdate)
+				) d
+
+full outer join
+(SELECT
+			  p.OwnerUserId AS 'Uid',  SUM(v.score) AS 'score',  
+              DATEPART(WEEK, p.CreationDate) AS 'calendar_week',  
+              COUNT(*) AS 'Answers_this_Week',
+			  SUM(p.commentcount) AS 'comments',  SUM(t.viewcount) AS 'views'
+
+			  FROM posts p
+			  INNER JOIN posts t
+			  ON p.parentId = t.Id
+			  
+			  LEFT OUTER JOIN (SELECT  postid,
+							  (SUM(CASE
+								WHEN VoteTypeId = 2 THEN 1	ELSE 0  END) - SUM(CASE	WHEN VoteTypeId = 3 THEN 1	ELSE 0  END)) AS  'score'
+								FROM votes
+								GROUP BY postid) v
+			  ON v.postid = p.Id
+			  WHERE (p.creationdate >= @start
+			  AND p.creationdate <= @end)
+			  AND p.posttypeid = 2
+			  GROUP BY p.OwnerUserId,
+					 DATEPART(WEEK, p.CreationDate)
+	  ) a
+      
+ON d.uid = a.uid
+AND a.calendar_week = d.week
+
+inner JOIN (SELECT  Id,  reputation AS 'reputation' FROM users WHERE reputation BETWEEN @reputation_from AND @reputation_to) b
+ON d.Uid = b.Id
+
+)
